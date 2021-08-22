@@ -4,3 +4,5 @@ data/session/wordpress/
 chromedriver.exe
 logs/
 .venv
+
+*.workflow

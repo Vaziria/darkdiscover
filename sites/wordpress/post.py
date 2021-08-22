@@ -1,51 +1,110 @@
+from typing import List
+import enum
+
 from common.logger import Logger
 
 from .client import Client
+from .tag import TagRepo
+from .category import CategoryRepo
 
 logger = Logger(__name__)
 
-class Post:
-    id: int = None
-    client: Client
+class StatusPost(enum.Enum):
+    publish = 'publish'
 
-    def __init__(self, client: Client):
+class Post:
+    id: int
+    content: str
+    status: StatusPost.publish
+    title: str
+    tags: List = []
+    categories: List = []
+
+    def __init__(self,
+        id: int,
+        content: str,
+        status: str,
+        title: str,
+        tags: List = [],
+        categories: List = []
+    ):
+        self.id = id
+        self.content = content
+        self.status = status
+        self.title = title
+
+        if tags:
+            self.tags = tags
+
+        if categories:
+            self.categories = categories
+        
+
+class PostRepo:
+    client: Client
+    siteid: int
+    tagRepo: TagRepo
+    categRepo: CategoryRepo
+
+    def __init__(self, client: Client, siteid: int, url:str, tagRepo: TagRepo, categRepo: CategoryRepo):
         self.client = client
+        self.siteid = siteid
+        self.url = url
+
+        self.tagRepo = tagRepo
+        self.categRepo = categRepo
 
     def get_id(self):
-        res = self.client.session.get('https://pdfzone2017.wordpress.com/wp-admin/post-new.php')
+        res = self.client.session.get('{}/wp-admin/post-new.php'.format(self.url))
         html = res.html()
         inputs = html.xpath('//input[@name="post_ID"]/@value')
         
         return inputs[0]
 
-    def publish(self):
-        if not self.id:
-            self.id = self.get_id()
-            logger.debug('[ {} ] publishing post {}'.format(self.client.email, self.id))
-            
+    def publish(self, post: Post):
+        if not post.id:
+            post.id = self.get_id()
+            logger.debug('[ {} ] publishing post {}'.format(self.client.email, post.id))
 
+        if post.tags:
+            tags = self.tagRepo.tags_to_id(post.tags)
+            post.tags = tags
+
+        if post.categories:
+            categories = self.categRepo.category_to_id(post.categories)
+            post.categories = categories
+            
         query = {
             "_envelope": 1,
             "environment-id": 'production',
             # &_gutenberg_nonce=5d156db9cc&
             "_locale": "user"
         }
-        path = '/sites/138105357/posts/{}'.format(self.id)
+        path = '/sites/{}/posts/{}'.format(self.siteid, post.id)
 
-        payload = {
-            "content": "test",
-            "id": self.id,
-            "status": "publish",
-            "title": "hansoltest"
-        }
+        payload = post.__dict__
 
         res = self.client.session.put(path, tipe="api_v2", query=query, json=payload)
-        print(res.text)
+        if res.ok:
+            self.client.save_obj()
+            return res.json()
+
+        logger.error('[ {} ] publish post {} error'.format(self.client.email, post.id))
+        return False
 
 if __name__ =='__main__':
     client = Client("manorder123@gmail.com", "santoso7777")
-    if client.fresh:
-        client.login()
+    client.login()
 
-    post = Post(client)
-    post.publish()
+    postr = PostRepo(client, 138105357, 'https://pdfzone2017.wordpress.com')
+
+    post = Post(
+        None,
+        "pergilah kasih kejarlah keign==",
+        StatusPost.publish.value,
+        "test category",
+        ["fluux", "siderblues", "responsive"],
+        ["kelaparan", "tag blues"]
+    )
+
+    postr.publish(post)

@@ -19,6 +19,9 @@ class Persist:
         with open(self.loc, 'w+b') as out:
             pickle.dump(data, out)
 
+    def remove_obj(self):
+        os.remove(self.loc)
+
     def load_obj(self):
         if not os.path.exists(self.loc):
             self.loc_not_exist()

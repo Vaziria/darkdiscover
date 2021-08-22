@@ -10,6 +10,8 @@ from lxml import etree
 class CResponse:
     res: Response
     status_code: int
+    ok: bool
+    text: str
 
     def get_cookies(self):
         return self.res.cookies.get_dict()
@@ -82,6 +84,11 @@ class CommonSession(Session):
 
     def post(self, path, tipe=None, query=None, data=None, json=None, **kwargs) -> CResponse:
         url = self.generate_url(tipe, path, query)
+
+        if json:
+            kwargs['headers'] = {
+                "content-type": "application/json"
+            }
         self.inject_headers(kwargs)
 
         res = super().post(url, data, json, **kwargs)
