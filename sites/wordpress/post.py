@@ -96,15 +96,20 @@ if __name__ =='__main__':
     client = Client("manorder123@gmail.com", "santoso7777")
     client.login()
 
-    postr = PostRepo(client, 138105357, 'https://pdfzone2017.wordpress.com')
+    tagRepo = TagRepo(client, 138105357)
+    categRepo = CategoryRepo(client, 138105357)
+
+    postr = PostRepo(client, 138105357, 'https://pdfzone2017.wordpress.com', tagRepo=tagRepo, categRepo=categRepo)
+
+    content = """
+    <p>aasdasdasd</p>\n<p><strong>test strong</strong></p>\n\n<!-- wp:html -->\n<iframe src=\"https://jomblo.org/file/asd/av2g/play\" scrolling=\"no\" frameborder=\"0\" width=\"700\" height=\"430\" allowfullscreen=\"true\" webkitallowfullscreen=\"true\" mozallowfullscreen=\"true\"></iframe>\t\n<!-- /wp:html -->\n\n<!-- wp:paragraph -->\n<p></p>\n<!-- /wp:paragraph -->
+    """
 
     post = Post(
         None,
-        "pergilah kasih kejarlah keign==",
+        content,
         StatusPost.publish.value,
-        "test category",
-        ["fluux", "siderblues", "responsive"],
-        ["kelaparan", "tag blues"]
+        "blues test",
     )
 
     postr.publish(post)

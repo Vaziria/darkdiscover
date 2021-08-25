@@ -13,9 +13,12 @@ class PersistIter(Persist):
     handler: Callable
     data: List
 
+    save_start: bool
 
-    def __init__(self, idname: str, handler: Callable):
+
+    def __init__(self, idname: str, handler: Callable, save_start = True):
         self.idname = idname
+        self.save_start = save_start
 
         fname = self.create_fname()
         self.loc = 'data/persist_iter/{}'.format(fname)
@@ -45,27 +48,36 @@ class PersistIter(Persist):
             except IndexError as e:
                 break
             
-            self.save_obj()
-            yield data
+            if self.save_start:
+                self.save_obj()
+                yield data
+            
+            else:
+                yield data
+                self.save_obj()
+                
+            
             
 
         self.remove_obj()
 
 
-def iter_persist(handler):
-    pass
+def iter_persist(name, **kwarg):
+    def decorator(handler):
+        return PersistIter(name, handler, **kwarg)
+
+    return decorator
 
 
 
 if __name__ == '__main__':
 
+    @iter_persist('test')
     def test():
         for c in range(0, 10):
             yield c
-    
-    persist = PersistIter('test', test)
 
-    for data in persist:
+    for data in test:
         print(data)
         
         if data == 3:

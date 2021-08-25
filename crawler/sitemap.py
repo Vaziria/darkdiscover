@@ -4,6 +4,8 @@ from lxml import etree
 import requests
 
 from common.logger import Logger
+from common.persist_iter import iter_persist
+from selenium.common.exceptions import NoSuchElementException
 
 logger = Logger(__name__)
 
@@ -20,17 +22,22 @@ class SitemapCrawler:
             self.http = requests.Session()
 
     def get_links(self, url: str = None):
+        save_start = True
         if not url:
             url = self.url
+            save_start = False
 
         res = self.http.get(url)
         
         if res.status_code != 200:
             logger.error('error xml {}'.format(url))
 
-        xml: etree._Element = etree.HTML(res.text.encode('utf8'))
+        @iter_persist(url, save_start=save_start)
+        def links():
+            xml: etree._Element = etree.HTML(res.text.encode('utf8'))
+            return xml.xpath('//loc/text()')
 
-        for link in xml.xpath('//loc/text()'):
+        for link in links:
             if link[-4:] == '.xml':
                 for linkc in self.get_links(link):
                     if linkc[-4:] != '.jpg':

@@ -2,6 +2,10 @@ from typing import List
 import pickle
 import os
 
+from common.logger import Logger
+
+logger = Logger(__name__)
+
 class Persist:
     loc: str
     persist_exclude: List = []
@@ -27,9 +31,12 @@ class Persist:
             self.loc_not_exist()
             self.fresh = True
             return False
-
-        with open(self.loc, 'rb') as out:
-            data = pickle.load(out)
+        try:
+            with open(self.loc, 'rb') as out:
+                data = pickle.load(out)
+        except EOFError:
+            data = {}
+            logger.error('cannot load data {}'.format(self.loc), exc_info=True)
 
         self.__dict__.update(data)
 

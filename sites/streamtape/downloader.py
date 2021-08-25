@@ -4,8 +4,19 @@ import requests
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import UnexpectedAlertPresentException, TimeoutException
 
-class DoodDownloader:
+from common.logger import Logger
+
+logger = Logger(__name__)
+
+class PageData:
+    fname: str
+    url: str
+    size: int
+    thumbnail: str
+
+class StreamtapeDownloader:
     driver: webdriver.Chrome
     path_download: str
 
@@ -18,14 +29,15 @@ class DoodDownloader:
 
         options = webdriver.ChromeOptions() 
         options.add_argument("start-maximized")
-        # options.add_argument("--headless")
+        if os.environ.get('headless'):
+            options.add_argument("--headless")
 
         prefs = { "download.default_directory" : os.path.abspath("./")}
         options.add_experimental_option("prefs",prefs)
 
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
-        self.driver = webdriver.Chrome(options=options, executable_path="./chromedriver.exe")
+        self.driver = webdriver.Chrome(options=options)
 
     def get_cookies(self):
         cookies = {}
@@ -60,27 +72,85 @@ class DoodDownloader:
                     f.write(chunk)
         return local_filename
 
-    def download(self, link: str):
-        self.driver.get(link)
-        elem = self.driver.find_element_by_xpath('//h4')
+    def close_iklan(self):
+        for handler in self.driver.window_handles:
+            self.driver.switch_to.window(handler)
+            try:
+                url = self.driver.current_url
+            except UnexpectedAlertPresentException:
+                continue
+            
+            if url.find('streamtape') == -1:
+                self.driver.close()
+        
+        handler = self.driver.window_handles[0]
+        self.driver.switch_to.window(handler)
+
+    def get_data(self) -> PageData:
+        elem = self.driver.find_element_by_xpath('//h2')
         fname = elem.text
 
-        elem = self.driver.find_element_by_xpath("//*[contains(text(), 'Download Now')]")
-        elem.click()
+        # click close
+        try:
+            elem = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, '//div[@class="_vlwsig "]/div')))
+            elem.click()
+        except TimeoutException:
+            pass
 
-        link = WebDriverWait(self.driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".download-content > a")))
-        lpdownload = link.get_attribute("href")
-        self.driver.get(lpdownload)
+        self.close_iklan()
 
-        elem = self.driver.find_element_by_xpath("/html/body/div[1]/div/div/a")
-        url = elem.get_attribute("onclick").replace("window.open('", '').replace("', '_self')", '')
+        for c in range(0, 100):
+            try:
+                elem = self.driver.find_element_by_xpath("//*[contains(text(), 'Download Video')]")
+                elem.click()
+            except Exception as e:
+                logger.debug('tombol download video notfound')
 
-        cookies = self.get_cookies()
+            self.close_iklan()
 
-        self.download_file(fname, url)
+            link = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#downloadvideo")))
+            url = link.get_attribute("href")
+            
+            if url.find('/get_video?') != -1:
+                break
+        
+        elem = self.driver.find_element_by_xpath('//video[@id="mainvideo"]')
+        thumbnail = elem.get_attribute('poster')
 
-        return fname
+        data = PageData()
+        data.fname = fname
+        data.url = url
+        data.size = self.get_size()
+        data.thumbnail = thumbnail
+        
+        return data
+    
+    def get_size(self):
+
+        elem = self.driver.find_element_by_xpath('//p[@class="subheading"]')
+        text = elem.get_attribute('innerHTML')
+        if text.find('GB') != -1:
+            text = text.replace('GB', '').replace(' ', '').replace(',', '')
+            size = float(text) * 1000
+        else:
+            text = text.replace('MB', '').replace(' ', '').replace(',', '')
+            size = float(text)
+
+        return size
+
+    def download(self, link: str):
+        self.driver.get(link)
+        data = self.get_data(link)
+
+        self.download_file(data.fname, data.url)
+
+        return data.fname
 
 if __name__ == '__main__':
-    handler = DoodDownloader('data/download/')
-    handler.download('https://dood.la/d/xmeo1g0h1h00')
+    handler = StreamtapeDownloader('data/download/')
+    handler.driver.get('https://streamtape.com/v/12qzbVdp2gfdmK/Russian_Anal_Casting_with_Flick_Luchik%2C_Balls_Deep_Anal%2C_Gapes_and_Swallow_GL257-23072020.mp4')
+    size = handler.get_size()
+    data = handler.get_data()
+
+    print(size)
+    print(data.__dict__)

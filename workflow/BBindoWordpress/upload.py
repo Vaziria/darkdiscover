@@ -1,43 +1,63 @@
-from typing import Generator
 from itertools import cycle
+import json
 
 from lxml import etree
 from pyhtml import *
+from selenium.common.exceptions import NoSuchElementException
 
-from common.persist import Persist
 from common.logger import Logger
 from crawler.sitemap import SitemapCrawler
 from sites.wordpress.client import Client
 from sites.wordpress.sites import SiteRepo, Site
 from sites.wordpress.post import Post
+from sites.streamtape.downloader import StreamtapeDownloader
 
 logger = Logger(__name__)
 
-class Upload(Persist):
-    loc = 'data/BBindoWordpress.workflow'
+class Upload:
 
     crawler: SitemapCrawler
+    streamtape: StreamtapeDownloader
     client: Client
     repo: SiteRepo
-    links: Generator = False
+
+    size: int = 100
 
     def __init__(self, email: str, pwd: str):
-        if not self.load_obj():
-            self.crawler = SitemapCrawler('http://23.234.240.172/sitemap_index.xml')
-            
-            client = Client(email, pwd)
-            repo = SiteRepo(client)
 
-            self.client = client
-            self.repo = SiteRepo(client)
+        self.crawler = SitemapCrawler('http://23.234.240.172/sitemap_index.xml')
+        self.streamtape = StreamtapeDownloader('data/download/')
+        
+        client = Client(email, pwd)
+        repo = SiteRepo(client)
+
+        self.client = client
+        self.repo = SiteRepo(client)
             
         
     def handler(self, xml: etree._Element):
         links = xml.xpath('//a/@href')
         for link in links:
             
-            if link.find('streamtape') != -1:
-                yield link
+            if link.find('streamtape') == -1:
+                continue
+            
+            self.streamtape.driver.get(link)
+            try:
+                size = self.streamtape.get_size()
+            except NoSuchElementException:
+                logger.info('link error {}'.format(link))
+                continue
+
+            data = self.streamtape.get_data()
+            with open('dump.txt', 'a+') as out:
+                out.write(json.dumps(data.__dict__)+'\n')
+
+            if size > self.size:
+                logger.info('size lebih besar {}'.format(link))
+                continue
+
+            yield data
 
     def generate_post(self, link) -> Post:
         idnya = link.split('/')[-2]
@@ -59,27 +79,20 @@ class Upload(Persist):
     def run(self):
 
         self.client.login()
-        sites = cycle(self.repo.get_sites())
 
-        if not self.links:
-            self.links = self.crawler.get_links()
-        
-        self.save_obj()
-
-        return False
+        # sites = cycle(self.repo.get_sites())
 
         for link in self.crawler.get_links():
             raw = self.crawler.get_page(link)
-
-            site: Site = next(sites)
+            # site: Site = next(sites)
 
             for stlink in self.handler(raw):
-                post = self.generate_post(link=stlink)
-                site.postRepo.publish(post=post)
+                logger.info(stlink)
 
-                logger.info('[ {} ] uploaded {} --> {}'.format(site.client.email, site.url, stlink))
+                # post = self.generate_post(link=stlink)
+                # site.postRepo.publish(post=post)
 
-                self.save_obj()
+                # logger.info('[ {} ] uploaded {} --> {}'.format(site.client.email, site.url, stlink))
 
 if __name__ == '__main__':
     
