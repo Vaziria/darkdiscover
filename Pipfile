@@ -8,6 +8,7 @@ requests = "==2.25.0"
 lxml = "*"
 selenium = "*"
 pyhtml = "*"
+pyautogui = "*"
 
 [dev-packages]
 

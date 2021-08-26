@@ -1,12 +1,15 @@
 import os
-from selenium import webdriver
 import requests
+from selenium.webdriver import ChromeOptions
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import UnexpectedAlertPresentException, TimeoutException
 
 from common.logger import Logger
+from common.chrome_driver import ChromeDriver
+
+executable_path = os.environ.get('selenium_driver', '')
 
 logger = Logger(__name__)
 
@@ -15,9 +18,10 @@ class PageData:
     url: str
     size: int
     thumbnail: str
+    url_page: str
 
 class StreamtapeDownloader:
-    driver: webdriver.Chrome
+    driver: ChromeDriver
     path_download: str
 
     def __init__(self, path_download: str):
@@ -26,18 +30,7 @@ class StreamtapeDownloader:
             os.makedirs(path_download)
 
         self.path_download = path_download
-
-        options = webdriver.ChromeOptions() 
-        options.add_argument("start-maximized")
-        if os.environ.get('headless'):
-            options.add_argument("--headless")
-
-        prefs = { "download.default_directory" : os.path.abspath("./")}
-        options.add_experimental_option("prefs",prefs)
-
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
-        self.driver = webdriver.Chrome(options=options)
+        self.driver = ChromeDriver()
 
     def get_cookies(self):
         cookies = {}
@@ -122,6 +115,7 @@ class StreamtapeDownloader:
         data.url = url
         data.size = self.get_size()
         data.thumbnail = thumbnail
+        data.url_page = self.driver.current_url
         
         return data
     
