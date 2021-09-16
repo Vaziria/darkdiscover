@@ -1,5 +1,7 @@
 from lxml import etree
 
+from common.persist_iter import iter_persist
+
 from .client import Client
 from .post import PostIterator
 
@@ -86,7 +88,11 @@ class ForumIterator:
                 break
 
     def iterate_forum(self):
-        for url in self.iterate():
+        @iter_persist(self.url)
+        def forums():
+            return self.iterate()
+
+        for url in forums:
             print('[ {} ] iterating thread {}'.format(self.client.email, self.path))
             post = PostIterator(self.client, url)
             
@@ -99,7 +105,8 @@ class ForumIterator:
 
 if __name__ == '__main__':
     client = Client('seaseblues@gmail.com', 'bluefin1234')
-    forum = ForumIterator(client, 'http://93.115.24.210/forums/film.53')
+    # client = Client('sweetestname013@gmail.com', 'heri7777')
+    forum = ForumIterator(client, 'http://93.115.24.210/forums/film-cewek-indonesia-igo.11/')
 
     for data  in forum.iterate_forum():
         print(type(data.text))

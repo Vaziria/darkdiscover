@@ -55,7 +55,6 @@ class SiteRepo:
 
         if res.ok:
             hasil = []
-
             for site in res.json()['body']['sites']:
                 site = self.parse_site(site)
                 hasil.append(site)

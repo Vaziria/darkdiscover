@@ -9,6 +9,7 @@ lxml = "*"
 selenium = "*"
 pyhtml = "*"
 pyautogui = "*"
+tqdm = "*"
 
 [dev-packages]
 

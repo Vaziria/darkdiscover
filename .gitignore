@@ -7,3 +7,9 @@ logs/
 .venv
 dump.txt
 *.workflow
+data/persist/
+data/chrome/
+data/test/
+data/session/
+
+.ipynb_checkpoints/

@@ -77,7 +77,6 @@ class CommonSession(Session):
     def get(self, path, tipe=None, query=None, **kwargs) -> CResponse:
         url = self.generate_url(tipe, path, query)
         self.inject_headers(kwargs)
-        
         res = super().get(url, **kwargs)
 
         return CResponse(res)

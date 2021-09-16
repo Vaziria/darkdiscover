@@ -4,8 +4,8 @@ from hashlib import md5
 import json
 
 from common.persist import Persist
-from forum46.client import Client
-from forum46.forum import ForumIterator
+from .client import Client
+from .forum import ForumIterator
 
 class LinkDiscovery(Persist):
 

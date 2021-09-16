@@ -1,13 +1,14 @@
 import os
-import requests
-from selenium.webdriver import ChromeOptions
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import UnexpectedAlertPresentException, TimeoutException
+import time
+from uuid import uuid4
+import re
 
+import requests
+from lxml import etree
+from tqdm import tqdm
+from urllib.parse import unquote
 from common.logger import Logger
-from common.chrome_driver import ChromeDriver
+from common.http.session import CommonSession
 
 executable_path = os.environ.get('selenium_driver', '')
 
@@ -21,7 +22,6 @@ class PageData:
     url_page: str
 
 class StreamtapeDownloader:
-    driver: ChromeDriver
     path_download: str
 
     def __init__(self, path_download: str):
@@ -30,19 +30,10 @@ class StreamtapeDownloader:
             os.makedirs(path_download)
 
         self.path_download = path_download
-        self.driver = ChromeDriver()
 
-    def get_cookies(self):
-        cookies = {}
-        for cookie in self.driver.get_cookies():
-            cookies[cookie['name']] = cookie['value']
-
-        return cookies
-
-    def download_file(self, fname, url):
-        cookies = self.get_cookies()
+    def download_file(self, fname, url, cookies):
         headers = {
-            "Referer": "https://dood.la/",
+            "Origin": "https://streamtape.com",
             "sec-ch-ua": '"Chromium";v="92", " Not A;Brand";v="99", "Google Chrome";v="92"',
             'sec-ch-ua-mobile': "?0",
             "Sec-Fetch-Dest": "document",
@@ -53,98 +44,71 @@ class StreamtapeDownloader:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36"
         }
         
-        local_filename = self.path_download + fname + '.mp4'
+        local_filename = self.path_download + fname
         # NOTE the stream=True parameter below
-        with requests.get(url, stream=True, cookies=cookies, headers=headers) as r:
+        size = 0
+        bar = None
+        chunk_size = 8192
+        with requests.get(url, stream=True, headers=headers, cookies=cookies) as r:
+
+            if size == 0:
+                size = int(r.headers.get('Content-length'))
+                bar = tqdm(range(size))
+                
+        
+
             r.raise_for_status()
             with open(local_filename, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192): 
+                for chunk in r.iter_content(chunk_size=chunk_size): 
                     # If you have chunk encoded response uncomment if
                     # and set chunk_size parameter to None.
                     #if chunk: 
                     f.write(chunk)
-        return local_filename
+                    # try:
+                    bar.update(chunk_size)
+                    # except Exception:
+                    #     pass
 
-    def close_iklan(self):
-        for handler in self.driver.window_handles:
-            self.driver.switch_to.window(handler)
-            try:
-                url = self.driver.current_url
-            except UnexpectedAlertPresentException:
-                continue
-            
-            if url.find('streamtape') == -1:
-                self.driver.close()
-        
-        handler = self.driver.window_handles[0]
-        self.driver.switch_to.window(handler)
-
-    def get_data(self) -> PageData:
-        elem = self.driver.find_element_by_xpath('//h2')
-        fname = elem.text
-
-        # click close
-        try:
-            elem = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, '//div[@class="_vlwsig "]/div')))
-            elem.click()
-        except TimeoutException:
-            pass
-
-        self.close_iklan()
-
-        for c in range(0, 100):
-            try:
-                elem = self.driver.find_element_by_xpath("//*[contains(text(), 'Download Video')]")
-                elem.click()
-            except Exception as e:
-                logger.debug('tombol download video notfound')
-
-            self.close_iklan()
-
-            link = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#downloadvideo")))
-            url = link.get_attribute("href")
-            
-            if url.find('/get_video?') != -1:
-                break
-        
-        elem = self.driver.find_element_by_xpath('//video[@id="mainvideo"]')
-        thumbnail = elem.get_attribute('poster')
-
-        data = PageData()
-        data.fname = fname
-        data.url = url
-        data.size = self.get_size()
-        data.thumbnail = thumbnail
-        data.url_page = self.driver.current_url
-        
-        return data
-    
-    def get_size(self):
-
-        elem = self.driver.find_element_by_xpath('//p[@class="subheading"]')
-        text = elem.get_attribute('innerHTML')
-        if text.find('GB') != -1:
-            text = text.replace('GB', '').replace(' ', '').replace(',', '')
-            size = float(text) * 1000
-        else:
-            text = text.replace('MB', '').replace(' ', '').replace(',', '')
-            size = float(text)
-
-        return size
+        return local_filename 
 
     def download(self, link: str):
-        self.driver.get(link)
-        data = self.get_data(link)
+        fname = unquote(link).split('/')[-1]
 
-        self.download_file(data.fname, data.url)
+        session = CommonSession({})
+        res = session.get(link)
+        
+        if res.status_code != 200:
+            logger.error('gagal {}'.format(link))
 
-        return data.fname
+        data = etree.HTML(res.text)
+        links = data.xpath('//div[@id="videoolink"]')
+        link = 'https:' + links[0].text
+
+        pola = re.compile(r'token\=([a-zA-Z0-9\_\-]*)')
+
+        scripts = data.xpath('//script')
+        for script in scripts:
+            if script.text == None:
+                continue
+
+            if script.text.find("document.getElementById('videoolink')") == -1:
+                continue
+            
+            tokens = pola.findall(script.text)
+            if len(tokens) > 0:
+                link = pola.sub('token=' + tokens[0], link) + '&dl=1'
+                break
+        
+        cookies = session.cookies.get_dict()
+        self.download_file(fname, link, cookies)
+        return self.path_download + fname
 
 if __name__ == '__main__':
     handler = StreamtapeDownloader('data/download/')
-    handler.driver.get('https://streamtape.com/v/12qzbVdp2gfdmK/Russian_Anal_Casting_with_Flick_Luchik%2C_Balls_Deep_Anal%2C_Gapes_and_Swallow_GL257-23072020.mp4')
-    size = handler.get_size()
-    data = handler.get_data()
+    url = 'https://streamtape.com/v/12qzbVdp2gfdmK/Russian_Anal_Casting_with_Flick_Luchik%2C_Balls_Deep_Anal%2C_Gapes_and_Swallow_GL257-23072020.mp4'
+    handler.download(url)
+    # size = handler.get_size()
+    # data = handler.get_data()
 
-    print(size)
-    print(data.__dict__)
+    # print(size)
+    # print(data.__dict__)

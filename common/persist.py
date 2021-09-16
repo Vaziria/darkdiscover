@@ -1,6 +1,7 @@
 from typing import List
 import pickle
 import os
+from hashlib import md5
 
 from common.logger import Logger
 
@@ -13,6 +14,11 @@ class Persist:
 
     def loc_not_exist(self):
         pass
+
+    def gen_persistid(self, text):
+        hasil = md5(text.encode('utf8'))
+
+        return hasil.hexdigest()
 
     def save_obj(self):
         data = {}

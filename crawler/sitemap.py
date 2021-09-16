@@ -2,6 +2,7 @@ from typing import List
 
 from lxml import etree
 import requests
+from requests.adapters import HTTPAdapter
 
 from common.logger import Logger
 from common.persist_iter import iter_persist
@@ -20,6 +21,7 @@ class SitemapCrawler:
             self.http = httphandler
         else:
             self.http = requests.Session()
+            self.http.mount('http://23.234.240.172', HTTPAdapter(max_retries=5))
 
     def get_links(self, url: str = None):
         save_start = True
